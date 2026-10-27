@@ -1,0 +1,16 @@
+name: Démo permissions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  creer-etiquette:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Créer une étiquette avec le GITHUB_TOKEN
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh label create demo-permissions --repo ${{ github.repository }} --color 0E8A16 --force
