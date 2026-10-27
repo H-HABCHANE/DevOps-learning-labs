@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   tests:
-    run-on: ubuntu-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
