@@ -40,3 +40,18 @@ Principe : la CI refait automatiquement ce qu'on sait faire à la main. On valid
 
 **En CI : `ruff check --fix .` ou `ruff check .` ?**
 → `ruff check .`. La correction faite sur le runner serait perdue à sa destruction, et la CI doit signaler le problème, pas le masquer. On corrige en local avec `--fix`.
+
+**Que renvoient `prix_ttc(10)` et `prix_ttc(10, 0.20)` ?**
+→ `11.0` (10 × 1,10) et `12.0` (10 × 1,20).
+
+**Code de sortie de pytest quand un test échoue ? Effet en CI ?**
+→ `1` : la step échoue, le job devient rouge.
+
+**Quand un test échoue, qui a tort, le code ou le test ?**
+→ Pas forcément le code : le test peut être faux (ici `11.5` attendu à tort ; 10 € HT à 10 % = 11 €).
+
+**Code de sortie de `ruff check .` s'il trouve une erreur ? Effet sur les steps suivantes ?**
+→ `1` : la step échoue, les steps suivantes du job sont sautées, le job est rouge.
+
+**Pourquoi ruff a-t-il corrigé 1 erreur alors qu'il en annonçait 2 ?**
+→ Supprimer `import os` (F401) a fait disparaître le bloc d'imports, donc I001 aussi.

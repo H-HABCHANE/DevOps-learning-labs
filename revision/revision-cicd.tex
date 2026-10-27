@@ -1,0 +1,455 @@
+% Révision CI/CD - Hicham Habchane
+% Compilation : tectonic revision-cicd.tex
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+\fi
+\usepackage[french]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{needspace}
+\usepackage[hidelinks]{hyperref}
+
+% ---------- Mise en page ----------
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlist{nosep, leftmargin=*, topsep=2pt}
+\renewcommand{\arraystretch}{1.25}
+
+\definecolor{bleu}{RGB}{25,60,110}
+\definecolor{vert}{RGB}{30,110,60}
+\definecolor{rouge}{RGB}{160,40,40}
+\definecolor{fondcode}{gray}{0.95}
+\definecolor{commentaire}{gray}{0.40}
+
+\titleformat{\section}{\needspace{12\baselineskip}\Large\bfseries\color{bleu}}{\thesection.}{0.6em}{}[\vspace{-2pt}\textcolor{bleu}{\rule{\linewidth}{0.4pt}}]
+\titleformat{\subsection}{\needspace{6\baselineskip}\large\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{14pt}{8pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Révision CI/CD}
+\fancyhead[R]{\small\nouppercase{\leftmark}}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+% ---------- Blocs de code ----------
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{fondcode},
+  frame=single, rulecolor=\color{black!25}, framesep=3pt,
+  commentstyle=\color{commentaire}\itshape,
+  morecomment=[l]{\#},
+  columns=fullflexible, keepspaces=true,
+  breaklines=true, breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{commentaire}{$\hookrightarrow$}\space},
+  xleftmargin=3pt, xrightmargin=3pt,
+  upquote=true
+}
+
+% ---------- Encadrés ----------
+\newcommand{\retenir}[1]{\par\smallskip\noindent\colorbox{fondcode}{\parbox{\dimexpr\linewidth-2\fboxsep}{\textbf{\textcolor{bleu}{À retenir :}} #1}}\par\smallskip}
+
+% Question / réponse
+\newcommand{\qr}[2]{\par\needspace{4\baselineskip}\noindent\textbf{\textcolor{bleu}{Q.}} \textbf{#1}\par
+  \noindent\hspace*{1em}\parbox{\dimexpr\linewidth-1em}{\textcolor{vert}{$\rightarrow$} #2}\par\medskip}
+
+\newcommand{\cmd}[1]{\texttt{#1}}
+
+\title{\textbf{\textcolor{bleu}{CI/CD avec GitHub Actions : mes notes}}\\[4pt]
+\large Programme DevOps --- Jour 3, étapes 1 à 3}
+\author{Hicham Habchane}
+\date{27 octobre 2026}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{center}
+Dépôt : \url{https://github.com/H-HABCHANE/DevOps-learning-labs}
+\end{center}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{L'idée de la CI/CD}
+
+\textbf{Le problème :} à la main, on lance les tests, on construit l'image Docker, on la pousse. Un oubli, et on publie quelque chose de cassé.
+
+\begin{itemize}
+  \item \textbf{CI} (\emph{Continuous Integration}, intégration continue) : à chaque modification, le code est vérifié automatiquement (tests, lint).
+  \item \textbf{CD} (\emph{Continuous Delivery / Deployment}, livraison / déploiement continu) : si les vérifications passent, on publie (image Docker) ou on déploie automatiquement.
+\end{itemize}
+
+\textbf{L'analogie du restaurant :} à chaque modification de recette, un contrôleur qualité goûte le plat avant qu'il parte en salle.
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X l@{}}
+\toprule
+\textbf{GitHub Actions} & \textbf{Restaurant} & \textbf{En vrai} \\
+\midrule
+Workflow & la fiche de procédure qualité & fichier YAML dans \cmd{.github/workflows/} \\
+Event & « une recette a été modifiée » & \cmd{push}, \cmd{pull\_request}, horaire, manuel \\
+Job & un poste de contrôle & groupe de steps sur \textbf{une} machine \\
+Step & une action précise du poste & \cmd{run: pytest} ou \cmd{uses: actions/checkout@v5} \\
+Runner & le contrôleur qui travaille & VM neuve, ex. \cmd{ubuntu-latest} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection*{Trois règles}
+\begin{enumerate}
+  \item Le runner est une machine \textbf{neuve et vide} à chaque exécution : il faut récupérer le code (\cmd{checkout}) et installer les dépendances.
+  \item Les steps d'un job s'exécutent \textbf{dans l'ordre} sur la même machine (les fichiers restent entre steps). Une step qui échoue (code de sortie $\neq 0$) arrête le job, qui devient rouge.
+  \item Les jobs tournent \textbf{en parallèle}, chacun sur sa machine, sans rien partager. \cmd{needs:} impose un ordre et une condition de réussite.
+\end{enumerate}
+
+\begin{lstlisting}
+jobs:
+  tests:
+    ...
+  publier-image:
+    needs: tests        # attend que "tests" soit vert, sinon il est saute
+    ...
+\end{lstlisting}
+
+% =====================================================================
+\section{L'appli Python, testée en local}
+
+\textbf{Principe :} la CI refait automatiquement ce qu'on sait faire à la main. On valide donc tout en local d'abord.
+
+\subsection{Structure}
+\begin{lstlisting}
+02-appli-python/
+|-- app/calcul.py           # prix_ttc(prix_ht, tva=0.10)
+|-- tests/test_calcul.py    # 3 tests pytest
+`-- requirements-dev.txt    # outils de verification, versions epinglees
+\end{lstlisting}
+
+\subsection{Le code et les tests}
+\begin{lstlisting}[language=Python]
+def prix_ttc(prix_ht: float, tva: float = 0.10) -> float:
+    """Prix TTC arrondi au centime (TVA restauration : 10 %)."""
+    if prix_ht < 0:
+        raise ValueError("le prix ne peut pas être négatif")
+    return round(prix_ht * (1 + tva), 2)
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python]
+import pytest
+
+from app.calcul import prix_ttc
+
+
+def test_tva_par_defaut():
+    assert prix_ttc(10) == 11.0
+
+
+def test_tva_personnalisee():
+    assert prix_ttc(10, 0.20) == 12.0
+
+
+def test_prix_negatif_refuse():
+    with pytest.raises(ValueError):
+        prix_ttc(-5)
+\end{lstlisting}
+
+\begin{itemize}
+  \item pytest trouve tout seul les fichiers \cmd{test\_*.py} et les fonctions \cmd{test\_*}.
+  \item \cmd{assert X == Y} : si c'est faux, le test échoue.
+  \item \cmd{with pytest.raises(ValueError):} le bloc \emph{doit} lever cette erreur ; on teste aussi les mauvais cas.
+\end{itemize}
+
+\subsection{Versions épinglées}
+\begin{lstlisting}
+# requirements-dev.txt
+pytest==9.1.1
+ruff==0.17.3
+\end{lstlisting}
+Mêmes versions en local et sur le runner : build \textbf{reproductible}.
+
+\subsection{Codes de sortie}
+GitHub Actions ne lit qu'une chose : le \textbf{code de sortie}. \cmd{0} : step réussie. Autre chose : step en échec, job rouge, steps suivantes sautées.
+
+\begin{center}
+\begin{tabular}{@{}cl@{}}
+\toprule
+\textbf{Code pytest} & \textbf{Sens} \\
+\midrule
+\cmd{0} & tous les tests passent \\
+\cmd{1} & au moins un test échoue \\
+\cmd{5} & aucun test trouvé (évite un faux vert) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Lire un échec pytest}
+\begin{lstlisting}
+tests/test_calcul.py F..                       # une lettre par test : F = echec, . = OK
+>       assert prix_ttc(10) == 11.5            # > : la ligne qui casse
+E       assert 11.0 == 11.5                    # E : obtenu vs attendu
+tests/test_calcul.py:7: AssertionError         # fichier:ligne
+\end{lstlisting}
+\retenir{un test rouge ne veut pas dire que le code est faux : le test lui-même peut être erroné.}
+
+\subsection{Lint avec ruff}
+pytest vérifie que le code \textbf{fait la bonne chose} ; ruff vérifie qu'il est \textbf{propre}, sans l'exécuter.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Code} & \textbf{Sens} & \textbf{Famille} \\
+\midrule
+\cmd{F401} & import inutilisé & Pyflakes (erreurs logiques probables) \\
+\cmd{I001} & imports mal organisés & isort (ordre et forme des imports) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\cmd{[*]} = corrigeable automatiquement par \cmd{--fix}.
+
+\retenir{en local \cmd{ruff check --fix .} pour corriger ; en CI \cmd{ruff check .} pour vérifier. La CI doit signaler un problème, pas le cacher.}
+
+% =====================================================================
+\section{Git et GitHub}
+
+\subsection{Ce qu'on n'envoie pas}
+\begin{lstlisting}
+# .gitignore
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+\end{lstlisting}
+On envoie la recette, pas la vaisselle sale. Le \cmd{.venv} (52 Mo, lié à la machine) se reconstruit depuis \cmd{requirements-dev.txt}. \cmd{.git/info/exclude} : liste d'exclusion locale, jamais publiée.
+
+\subsection{Les deux temps de git}
+\cmd{git add} pose les plats sur le passe-plat (zone de préparation) ; \cmd{git commit} envoie le service (photo dans l'historique). \textbf{Toujours relire \cmd{git status} avant de commiter.}
+
+\begin{itemize}
+  \item \cmd{git add <fichier>} : précis, à préférer.
+  \item \cmd{git commit -am} : embarque \emph{tous} les fichiers suivis modifiés, même ceux oubliés. Aveugle.
+\end{itemize}
+
+\retenir{un secret commité reste dans l'historique même s'il est supprimé ensuite. S'il a été poussé : le considérer compromis et le révoquer immédiatement.}
+
+\subsection{Créer le dépôt GitHub}
+Sur \url{https://github.com/new} : ne \textbf{rien} cocher (README, licence\dots), sinon GitHub crée un commit sans ancêtre commun avec le dépôt local et le push est refusé.
+
+% =====================================================================
+\section{Le premier workflow}
+
+\begin{lstlisting}
+name: CI
+
+on:
+  push:
+    branches: [main]      # push : seulement sur main
+  pull_request:           # toute PR (opened, synchronize, reopened)
+
+permissions:
+  contents: read          # moindre privilege : lecture seule
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 02-appli-python
+    steps:
+      - name: Recuperer le code
+        uses: actions/checkout@v5
+
+      - name: Installer Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: 02-appli-python/requirements-dev.txt
+
+      - name: Installer les outils
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Tests (pytest)
+        run: python -m pytest -v
+\end{lstlisting}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+\textbf{Bloc} & \textbf{Sens} \\
+\midrule
+\cmd{.github/workflows/} & seul emplacement ; GitHub lance tout \cmd{.yml} placé ici \\
+\cmd{on: push: branches: [main]} & déclenché par un push sur \cmd{main} uniquement \\
+\cmd{on: pull\_request:} & déclenché par une PR : on vérifie \emph{avant} de fusionner \\
+\cmd{permissions: contents: read} & le workflow ne peut que lire le dépôt \\
+\cmd{working-directory} & chaque \cmd{run:} s'exécute dans \cmd{02-appli-python} \\
+\cmd{uses: ...@v5} & action toute faite, version épinglée \\
+\cmd{cache: pip} & cache des téléchargements ; clé = empreinte de \cmd{requirements-dev.txt} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{itemize}
+  \item \textbf{Fail fast :} ruff (1 s) avant pytest. Si ruff échoue, pytest est sauté.
+  \item Premier run : vert en 25 s, 3 PASSED. Cache : \cmd{Cache not found} au premier run, sauvegarde dans la step \emph{Post}, puis \cmd{Cache restored}.
+  \item YAML : l'indentation compte (2 espaces, jamais de tabulation).
+\end{itemize}
+
+% =====================================================================
+\section{Pull requests et protection de main}
+
+\subsection{Le cycle de travail}
+\begin{lstlisting}
+branche -> commit -> push -> PR -> CI rouge -> correction -> CI verte -> merge -> CI sur main
+                                       ^
+                 ruleset : merge interdit tant que ce n'est pas vert
+\end{lstlisting}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}X l l@{}}
+\toprule
+\textbf{Action} & \textbf{Event} & \textbf{Run ?} \\
+\midrule
+Push sur une branche \cmd{test-pr} & \cmd{push} & non (filtre \cmd{[main]}) \\
+Ouverture de la PR & \cmd{pull\_request} (\cmd{opened}) & oui \\
+Nouveau commit poussé sur la branche de la PR & \cmd{pull\_request} (\cmd{synchronize}) & oui \\
+Merge de la PR & \cmd{push} sur \cmd{main} & oui \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Ruleset \texttt{protection-main}}
+\emph{Settings $\rightarrow$ Rules $\rightarrow$ Rulesets $\rightarrow$ New branch ruleset} : cible = branche par défaut, règle \emph{Require status checks to pass} avec le check \cmd{tests}.
+\begin{itemize}
+  \item Sans ruleset, un check rouge est \textbf{informatif} : le merge reste possible.
+  \item Avec, le merge est bloqué tant que la CI n'est pas verte, et le push direct sur \cmd{main} est refusé.
+\end{itemize}
+\retenir{la CI détecte le problème ; c'est la protection de branche qui l'empêche d'atteindre \cmd{main}.}
+
+\subsection{Lire une PR et l'historique}
+\begin{itemize}
+  \item Une PR montre la différence \textbf{finale} entre les branches ; l'onglet Commits montre le chemin. Un fichier cassé puis réparé n'apparaît pas dans le diff.
+  \item La CI teste toujours le \textbf{dernier} commit de la branche.
+  \item \cmd{Your branch is up to date with 'origin/main'} compare à la dernière copie connue ; seul \cmd{fetch}/\cmd{pull} interroge GitHub.
+\end{itemize}
+
+\begin{lstlisting}
+*   c263f42 Merge pull request #1 from H-HABCHANE/test-pr
+|\
+| * 2a938d2 Correction du test : 10 EUR HT = 11 EUR TTC
+| * fd57b4b Test volontairement casse pour tester la CI sur PR
+|/
+* 0c20cc2 CI : workflow GitHub Actions (ruff + pytest)
+* 653b52d Jour 3 : vocabulaire GitHub Actions et appli Python testee
+\end{lstlisting}
+
+% =====================================================================
+\section{Mémo des commandes}
+
+\subsection{Shell}
+\begin{lstlisting}[language=bash]
+mkdir -p 02-appli-python/app          # creer un dossier et ses parents
+cmd1 && cmd2                          # cmd2 seulement si cmd1 reussit (code 0)
+cmd1 ; cmd2                           # cmd2 dans tous les cas
+echo "Code de sortie : $?"            # code de sortie de la derniere commande
+printf 'a\nb\n' > fichier             # ecrire ; > ECRASE (vide d'abord le fichier)
+printf 'a\n' >> fichier               # ajouter a la fin
+cat > fichier <<'EOF'                 # heredoc : plusieurs lignes jusqu'a EOF
+...
+EOF
+sed -i 's/ancien/nouveau/' fichier    # remplacer dans le fichier (-i = in place)
+sed -i '1i texte' fichier             # inserer une ligne avant la ligne 1
+mv "nom avec espaces.png" ~/Pictures/ # deplacer ; guillemets si espaces
+cd ~/CI\&CD                           # \& : le & fait partie du nom
+\end{lstlisting}
+
+\subsection{Python}
+\begin{lstlisting}[language=bash]
+python3 -m venv .venv                          # environnement isole
+.venv/bin/pip install -r requirements-dev.txt  # outils aux versions exactes
+python -m pytest -v                            # tests ; -m ajoute le dossier courant aux imports
+python -m pytest -q                            # sortie courte
+ruff check .                                   # verifier (CI)
+ruff check --fix .                             # corriger (local)
+\end{lstlisting}
+
+\subsection{Git}
+\begin{lstlisting}[language=bash]
+git init -b main                     # creer le depot, branche principale main
+git status --short                   # ?? non suivi, A ajoute, M modifie
+git add <fichier>                    # preparer un fichier precis
+git commit -m "message"              # enregistrer
+git log --oneline --graph -6         # historique dessine
+git show --stat --oneline HEAD       # fichiers du dernier commit
+git remote add origin git@github.com:H-HABCHANE/DevOps-learning-labs.git
+git push -u origin main              # premier push, memorise la branche suivie
+git switch -c ma-branche             # creer une branche et s'y placer
+git switch main && git pull          # main a jour avant chaque nouvelle branche
+git branch -d ma-branche             # supprimer la branche locale
+git push origin --delete ma-branche  # supprimer la branche sur GitHub
+\end{lstlisting}
+
+% =====================================================================
+\section{Questions et réponses}
+
+\subsection{Vocabulaire}
+\qr{Différence entre un job et une step ?}{Un job est un groupe de steps exécuté sur un seul runner. Une step est une seule commande (\cmd{run}) ou action (\cmd{uses}). Les steps d'un job partagent la même machine ; deux jobs sont sur deux machines différentes.}
+\qr{Que se passe-t-il avec seulement \cmd{run: pytest}, sans checkout ?}{Échec : le runner est neuf et ne contient pas le code. pytest n'est pas installé ; même installé, il ne trouverait aucun test (code 5).}
+\qr{Comment publier l'image seulement si les tests passent ?}{\cmd{needs: tests} dans le job \cmd{publier-image} : il attend la réussite de \cmd{tests}, sinon il est sauté.}
+
+\subsection{Appli Python, tests et lint}
+\qr{Faut-il refaire \cmd{pip install} à chaque exécution du workflow ?}{Oui, le runner est neuf. Le cache (\cmd{setup-python} avec \cmd{cache: pip}) accélère le téléchargement, mais l'installation se refait.}
+\qr{Pourquoi épingler les versions ?}{Build reproductible : même code + mêmes versions = même résultat en local et en CI. Sinon une nouvelle version d'un outil peut casser le pipeline sans changement de code.}
+\qr{Que renvoient \cmd{prix\_ttc(10)} et \cmd{prix\_ttc(10, 0.20)} ?}{\cmd{11.0} et \cmd{12.0}.}
+\qr{Code de sortie de pytest quand un test échoue ? Effet en CI ?}{\cmd{1} : la step échoue, le job devient rouge.}
+\qr{Quand un test échoue, qui a tort ?}{Pas forcément le code : le test peut être faux (ici \cmd{11.5} attendu à tort).}
+\qr{\cmd{no tests ran} en CI : vert ou rouge ?}{Rouge (code 5). Voulu : pas de tests = aucune preuve, on évite un faux vert.}
+\qr{Code de sortie de \cmd{ruff check .} s'il trouve une erreur ? Effet ?}{\cmd{1} : la step échoue, les suivantes sont sautées, le job est rouge.}
+\qr{En CI : \cmd{ruff check --fix .} ou \cmd{ruff check .} ?}{\cmd{ruff check .} : la correction faite sur le runner serait perdue, et la CI doit signaler, pas masquer. On corrige en local avec \cmd{--fix}.}
+\qr{Pourquoi ruff a-t-il corrigé 1 erreur alors qu'il en annonçait 2 ?}{Supprimer \cmd{import os} (F401) a fait disparaître le bloc d'imports, donc I001 aussi.}
+
+\subsection{Git et GitHub}
+\qr{Pourquoi ne pas pousser \cmd{.venv/} ?}{Lié au système et aux chemins de la machine, lourd (52 Mo), non portable. Il se reconstruit depuis \cmd{requirements-dev.txt}.}
+\qr{Que montre \cmd{git status --short} après \cmd{git init} ?}{\cmd{.gitignore}, \cmd{PROGRESSION.md}, \cmd{01-vocabulaire/}, \cmd{02-appli-python/} ; pas \cmd{.venv/} ni \cmd{CLAUDE.md}. Un dossier entièrement nouveau est résumé en une ligne (\cmd{-uall} pour le détail).}
+\qr{Pourquoi relire \cmd{git status} avant un commit ?}{Un secret commité reste dans l'historique ; poussé sur un dépôt public, il est exposé. Il faut alors le révoquer immédiatement.}
+\qr{Pourquoi ne rien cocher à la création du dépôt GitHub ?}{GitHub créerait un commit sans ancêtre commun avec le dépôt local : le push serait refusé.}
+\qr{Pourquoi \cmd{git pull} avant de créer une branche ?}{Sinon la branche part d'un \cmd{main} périmé : code ancien et conflits au moment de la PR.}
+
+\subsection{Workflow et pull requests}
+\qr{Pourquoi ruff avant pytest ?}{Fail fast : vérifications rapides d'abord, retour plus rapide ; si ruff échoue, pytest est sauté.}
+\qr{Le workflow se lance-t-il avant le push ?}{Non : GitHub ne voit que ce qui a été poussé.}
+\qr{Le premier run : quel résultat, quelle durée ?}{Vert en environ 25 s, 3 PASSED.}
+\qr{Pousser une branche \cmd{test-pr} déclenche-t-il le workflow ?}{Non : \cmd{push} est filtré sur \cmd{main}. Le run démarre à l'ouverture de la PR. Le filtre évite deux runs identiques par commit de PR.}
+\qr{Que fait la PR avec un test cassé ? Le merge est-il bloqué ?}{Check rouge (\cmd{assert 11.0 == 11.5}), mais le merge reste possible sans protection de branche.}
+\qr{Avec le ruleset, comment fusionner la PR ?}{Corriger sur la même branche et pousser : la PR suit sa branche, la CI se relance, verte $\rightarrow$ merge débloqué.}
+\qr{Pousser la correction sur \cmd{test-pr} déclenche-t-il un run ?}{Oui : \cmd{pull\_request}, type \cmd{synchronize}.}
+\qr{Après le merge, quel run apparaît et pourquoi, sans \cmd{git push} ?}{\cmd{push} sur \cmd{main} : le merge crée un commit sur \cmd{main}, ce qui est un push sur \cmd{main}.}
+
+% =====================================================================
+\section{La suite}
+\begin{itemize}
+  \item Étape 4 : construire l'image Docker et la pousser sur Docker Hub, seulement depuis \cmd{main} (livraison continue).
+  \item Étape 5 : secrets GitHub, permissions minimales, gestion des échecs.
+  \item Étape 6 : réparer un pipeline cassé, puis défi du Jour 3 sans aide.
+  \item Jour 8 : déploiement continu sur Kubernetes.
+\end{itemize}
+
+\end{document}
