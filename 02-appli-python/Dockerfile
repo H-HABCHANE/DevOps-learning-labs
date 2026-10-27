@@ -1,0 +1,4 @@
+FROM python:3.14-slim
+WORKDIR /app
+COPY app/ ./app/
+ENTRYPOINT ["python", "-m", "app"]
