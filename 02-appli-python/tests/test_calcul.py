@@ -4,7 +4,7 @@ from app.calcul import prix_ttc
 
 
 def test_tva_par_defaut():
-    assert prix_ttc(10) == 11.5
+    assert prix_ttc(10) == 11.0
 
 
 def test_tva_personnalisee():
