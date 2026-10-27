@@ -26,3 +26,4 @@ Validation : un push déclenche les tests et la publication conditionnelle.
 - 27/10/2026 : dossier CI&CD créé. Début du Jour 3, étape 1 (vocabulaire GitHub Actions).
 - 27/10 : étape 1 validée (job/step, checkout obligatoire, needs). Début étape 2.
 - 27/10 : étape 2 validée (venv, requirements-dev épinglé, 3 tests pytest, codes de sortie 0/1/5, ruff F401/I001, --fix local vs check en CI). Début étape 3.
+- 27/10 : dépôt GitHub H-HABCHANE/DevOps-learning-labs créé et poussé (653b52d). Workflow .github/workflows/ci.yml (0c20cc2) : premier run ✅ en 25 s, 3 PASSED. Reste dans l'étape 3 : déclencheur pull_request (branche + PR avec test cassé).
