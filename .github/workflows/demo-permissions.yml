@@ -9,6 +9,9 @@ permissions:
 jobs:
   creer-etiquette:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Créer une étiquette avec le GITHUB_TOKEN
         env:
