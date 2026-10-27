@@ -37,7 +37,7 @@ jobs:
         run: ruff check .
 
       - name: Tests (pytest)
-        run: python -m pytest -v || true
+        run: python -m pytest -v
 
       - name: Résumé en cas d'échec
         if: failure()
