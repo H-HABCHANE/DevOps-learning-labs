@@ -20,7 +20,7 @@ else
 fi
 
 # 2. Port : quelqu'un écoute-t-il ?
-if nc -z -w 3 "$IP" "$PORT" 2>/dev/null; then
+if nc -z -w 2 "$IP" "$PORT" 2>/dev/null; then
   echo "✅ Port : $PORT ouvert"
 else
   echo "❌ Port : rien n'écoute sur $IP:$PORT (vérifier sur le serveur : ss -tlnp)"
