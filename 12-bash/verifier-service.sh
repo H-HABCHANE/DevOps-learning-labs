@@ -2,6 +2,7 @@
 # Vérifie un service étape par étape : DNS, port (TCP), HTTP.
 # Usage : ./verifier-service.sh <hôte> <port> [chemin]
 # Codes de sortie : 0 tout va bien, 1 DNS, 2 port, 3 HTTP.
+# Variable : DELAI_PORT = délai du test de port en secondes (2 par défaut).
 
 set -euo pipefail
 
@@ -20,7 +21,7 @@ else
 fi
 
 # 2. Port : quelqu'un écoute-t-il ?
-if nc -z -w 2 "$IP" "$PORT" 2>/dev/null; then
+if nc -z -w "${DELAI_PORT:-2}" "$IP" "$PORT" 2>/dev/null; then
   echo "✅ Port : $PORT ouvert"
 else
   echo "❌ Port : rien n'écoute sur $IP:$PORT (vérifier sur le serveur : ss -tlnp)"
