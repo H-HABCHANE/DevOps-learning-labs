@@ -45,8 +45,22 @@ jobs:
           echo "## ❌ Échec du job tests" >> "$GITHUB_STEP_SUMMARY"
           echo "Relancer en local : \`ruff check .\` puis \`python -m pytest -v\`" >> "$GITHUB_STEP_SUMMARY"
 
-  publier-image:
+  verifier-image:
     needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v5
+
+      - name: Construire l'image
+        run: docker build -t app-test 02-appli-python
+
+      - name: Tester l'image
+        run: docker run --rm app-test 10 | grep "11.0 € TTC"
+
+  publier-image:
+    needs: [tests, verifier-image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
