@@ -1,0 +1,9 @@
+# Dossier des providers téléchargés par terraform init
+.terraform/
+# État de l'infrastructure : peut contenir des secrets, jamais dans git
+*.tfstate
+*.tfstate.*
+# Fichiers produits par l'exemple
+sortie/
+# Plans sauvegardés (terraform plan -out) : peuvent contenir des secrets
+*.tfplan
