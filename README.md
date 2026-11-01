@@ -1,4 +1,4 @@
-# DevOps learning labs
+# devops-infra-labs
 
 Labs pratiques réalisés pendant un programme intensif DevOps / Cloud (préparation d'un stage) : intégration continue,
 Linux et Bash, Infrastructure as Code, gestion de configuration et supervision. Chaque dossier contient du code
