@@ -1,0 +1,7 @@
+# Fichier géré par Ansible : toute modification à la main sera écrasée
+server {
+    listen {{ port_nginx }} default_server;
+    root /var/www/html;
+    index index.html;
+    server_tokens off;
+}

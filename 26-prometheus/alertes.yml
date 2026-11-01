@@ -1,0 +1,39 @@
+# Règles d'alerte : Prometheus les évalue toutes les 15 s (evaluation_interval).
+groups:
+  - name: labo
+    rules:
+      # Une cible ne répond plus au scraping.
+      - alert: CibleDown
+        expr: up == 0
+        for: 1m                      # doit durer 1 min avant de sonner (évite les fausses alertes)
+        labels:
+          severity: critical
+        annotations:
+          summary: "La cible {{ $labels.job }} ({{ $labels.instance }}) ne répond plus"
+
+      # Un site ne répond plus correctement à un vrai client (supervision active).
+      - alert: SiteIndisponible
+        expr: probe_success == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} est indisponible pour les clients"
+
+      # Le CPU du PC est très occupé, de façon durable.
+      - alert: CPUHaut
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU occupé à {{ $value | humanize }} % depuis plus de 2 min"
+
+      # Il reste moins de 10 % de mémoire libre.
+      - alert: MemoireBasse
+        expr: 100 * node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Plus que {{ $value | humanize }} % de mémoire libre"

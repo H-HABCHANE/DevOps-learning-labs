@@ -1,0 +1,9 @@
+# Source de données créée automatiquement au démarrage de Grafana (provisioning = configuration en code).
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy                  # c'est le serveur Grafana qui interroge Prometheus, pas le navigateur
+    url: http://prometheus:9090    # nom du service Compose (DNS interne de Docker)
+    isDefault: true
+    editable: false                # modifiable seulement par ce fichier

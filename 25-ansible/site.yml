@@ -1,0 +1,47 @@
+- name: Configurer les serveurs web
+  hosts: web
+  become: true
+  vars:
+    port_nginx: 80
+    message: "Bonjour depuis Ansible"
+
+  tasks:
+    - name: Installer nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Configurer le site
+      ansible.builtin.template:
+        src: templates/default.j2
+        dest: /etc/nginx/sites-available/default
+        mode: "0644"
+      notify: Recharger nginx
+
+    - name: Déposer la page d'accueil
+      ansible.builtin.template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+        mode: "0644"
+
+    - name: Déposer la configuration secrète de l'application
+      ansible.builtin.copy:
+        content: "CLE_API=change-moi\n"
+        dest: /etc/labo-app.env
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Démarrer nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+  handlers:
+    - name: Recharger nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded

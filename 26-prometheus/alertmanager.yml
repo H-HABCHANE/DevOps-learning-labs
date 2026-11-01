@@ -1,0 +1,13 @@
+# Alertmanager = le standardiste : qui prévenir, comment regrouper, quand relancer.
+route:
+  receiver: astreinte          # destinataire par défaut
+  group_by: [alertname]        # une notification par type d'alerte (pas une par serveur)
+  group_wait: 10s              # attendre 10 s pour regrouper les alertes qui arrivent ensemble
+  group_interval: 1m           # délai avant d'envoyer les changements d'un groupe déjà notifié
+  repeat_interval: 1h          # relancer une alerte toujours en cours au bout d'1 h (pas toutes les minutes)
+
+receivers:
+  - name: astreinte
+    webhook_configs:
+      - url: http://recepteur:5001/   # mon faux téléphone (en vrai : Slack, e-mail, PagerDuty...)
+        send_resolved: true           # prévenir aussi quand c'est réparé
