@@ -1,0 +1,40 @@
+# Configuration de Prometheus : qui surveiller, et toutes les combien de secondes.
+global:
+  scrape_interval: 15s      # passer relever les compteurs toutes les 15 s
+  evaluation_interval: 15s  # vérifier les règles d'alerte toutes les 15 s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]   # à qui envoyer les alertes en Firing
+
+rule_files:
+  - /etc/prometheus/alertes.yml   # mes règles d'alerte
+
+scrape_configs:
+  # 1re cible : Prometheus se surveille lui-même (il expose son propre /metrics).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 3e cible : la sonde. Prometheus demande à blackbox d'aller tester chaque URL comme un vrai client.
+  - job_name: sonde-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]                   # test « la page répond avec un code 2xx »
+    static_configs:
+      - targets:
+          - http://site/                   # le site du restaurant
+          - http://grafana:3000/api/health # la santé de Grafana
+    relabel_configs:
+      - source_labels: [__address__]      # l'URL à tester...
+        target_label: __param_target       # ... devient le paramètre ?target= de la sonde
+      - source_labels: [__param_target]
+        target_label: instance             # ... et le label instance (lisible dans les graphes)
+      - target_label: __address__
+        replacement: blackbox:9115         # mais Prometheus contacte en réalité la sonde
+
+  # 2e cible : le PC, via node-exporter. "node-exporter" = nom du service Compose (DNS interne de Docker).
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]

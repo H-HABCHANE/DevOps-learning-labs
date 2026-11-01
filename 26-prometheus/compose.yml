@@ -1,0 +1,82 @@
+# Labo de supervision du Jour 7 (Prometheus, node-exporter, puis Grafana).
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    container_name: prometheus
+    ports:
+      - "127.0.0.1:9090:9090"   # visible seulement depuis mon PC
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle     # autorise le rechargement à chaud : curl -X POST localhost:9090/-/reload
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro   # ma configuration, en lecture seule
+      - ./alertes.yml:/etc/prometheus/alertes.yml:ro         # mes règles d'alerte
+      - prometheus-data:/prometheus                          # l'historique survit au conteneur
+    restart: unless-stopped
+
+  # Le « capteur » du PC : expose CPU, mémoire, disque... sur son /metrics (port 9100).
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: node-exporter
+    command: --path.rootfs=/host   # lire les chiffres du PC dans /host, pas ceux du conteneur
+    pid: host                      # voir les processus du PC
+    volumes:
+      - /:/host:ro,rslave          # le disque du PC, en lecture seule
+    restart: unless-stopped
+    # Pas de "ports:" : seul Prometheus, sur le réseau Compose, a besoin de le joindre.
+
+  # La « salle des écrans » : tableaux de bord construits à partir des chiffres de Prometheus.
+  grafana:
+    image: grafana/grafana:13.2.4
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro   # source de données déclarée en code
+      - grafana-data:/var/lib/grafana                         # mes tableaux de bord survivent au conteneur
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Le « standardiste » : reçoit les alertes de Prometheus et prévient les bonnes personnes.
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    container_name: alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    restart: unless-stopped
+
+  # Le faux « téléphone d'astreinte » : affiche les notifications dans ses logs.
+  recepteur:
+    image: python:3.14-slim
+    container_name: recepteur
+    command: python /app/recepteur.py
+    volumes:
+      - ./recepteur/recepteur.py:/app/recepteur.py:ro
+    restart: unless-stopped
+
+  # Le site du restaurant : le service qu'on veut voir disponible.
+  site:
+    image: nginx:1.27-alpine
+    container_name: site
+    ports:
+      - "127.0.0.1:8080:80"
+    read_only: true            # prévention (post-mortem du 01/11) : système de fichiers en lecture seule
+    tmpfs:                     # seuls dossiers où nginx a besoin d'écrire (en mémoire, vidés au redémarrage)
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    restart: unless-stopped
+
+  # La sonde : se comporte comme un client (DNS, connexion, HTTP, code de réponse, durée).
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.0
+    container_name: blackbox
+    restart: unless-stopped
+
+volumes:
+  grafana-data:
+  prometheus-data:
